@@ -1,0 +1,11 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/kpakpando-airtime-tracker run build",
+  "outputDirectory": "artifacts/kpakpando-airtime-tracker/dist/public",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

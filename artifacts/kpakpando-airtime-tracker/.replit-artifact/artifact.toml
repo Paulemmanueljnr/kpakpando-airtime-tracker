@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Kpakpando Airtime Tracker"
+description = "A responsive radio-station operations dashboard for engineers on duty to manage jingles and sponsored programs, track payments and active dates, and see what airs today."
+version = "1.0.0"
+id = "artifacts/kpakpando-airtime-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24181
+
+[services.development]
+run = "pnpm --filter @workspace/kpakpando-airtime-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/kpakpando-airtime-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/kpakpando-airtime-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24181"
+BASE_PATH = "/"

@@ -1,0 +1,236 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Kpakpando Airtime Tracker API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: airtime
+    description: Airtime entries and dashboard summary
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [airtime]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /entries:
+    get:
+      operationId: listEntries
+      tags: [airtime]
+      summary: List airtime entries
+      responses:
+        "200":
+          description: All airtime entries, including expired entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AirtimeEntry"
+    post:
+      operationId: createEntry
+      tags: [airtime]
+      summary: Create an airtime entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AirtimeEntryInput"
+      responses:
+        "201":
+          description: Created airtime entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirtimeEntry"
+        "400":
+          description: Invalid entry
+  /entries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getEntry
+      tags: [airtime]
+      summary: Get an airtime entry
+      responses:
+        "200":
+          description: Airtime entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirtimeEntry"
+        "404":
+          description: Entry not found
+    put:
+      operationId: updateEntry
+      tags: [airtime]
+      summary: Update or renew an airtime entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AirtimeEntryInput"
+      responses:
+        "200":
+          description: Updated airtime entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirtimeEntry"
+        "400":
+          description: Invalid entry
+        "404":
+          description: Entry not found
+    delete:
+      operationId: deleteEntry
+      tags: [airtime]
+      summary: Permanently delete an airtime entry
+      responses:
+        "204":
+          description: Entry permanently deleted
+        "404":
+          description: Entry not found
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [airtime]
+      summary: Get dashboard counts for today
+      responses:
+        "200":
+          description: Current status counts using Africa/Lagos dates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AirtimeType:
+      type: string
+      enum: [Jingle, Sponsored Program]
+    PaymentStatus:
+      type: string
+      enum: [Paid, Unpaid]
+    Weekday:
+      type: string
+      enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+    AirtimeEntry:
+      type: object
+      required:
+        - id
+        - type
+        - client
+        - title
+        - paymentStatus
+        - startDate
+        - endDate
+        - timeSlots
+        - daysOfWeek
+        - notes
+        - createdAt
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/AirtimeType"
+        client:
+          type: string
+        title:
+          type: string
+        paymentStatus:
+          $ref: "#/components/schemas/PaymentStatus"
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        timeSlots:
+          type: array
+          items:
+            type: string
+            pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$'
+        daysOfWeek:
+          type: array
+          items:
+            $ref: "#/components/schemas/Weekday"
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    AirtimeEntryInput:
+      type: object
+      required:
+        - type
+        - client
+        - title
+        - paymentStatus
+        - startDate
+        - endDate
+        - timeSlots
+      properties:
+        type:
+          $ref: "#/components/schemas/AirtimeType"
+        client:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        paymentStatus:
+          $ref: "#/components/schemas/PaymentStatus"
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        timeSlots:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$'
+        daysOfWeek:
+          type: array
+          items:
+            $ref: "#/components/schemas/Weekday"
+        notes:
+          type: string
+    DashboardSummary:
+      type: object
+      required: [active, expiringSoon, unpaid, airingToday]
+      properties:
+        active:
+          type: integer
+        expiringSoon:
+          type: integer
+        unpaid:
+          type: integer
+        airingToday:
+          type: integer
+
