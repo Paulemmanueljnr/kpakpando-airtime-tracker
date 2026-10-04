@@ -220,6 +220,22 @@
 .alarm-utility-btn:hover { background:#eeeade; }
 .alarm-utility-btn:disabled { cursor:wait; opacity:.65; }
 .alarm-utility-btn.muted { color:#9a4d3e; border-color:#e0c9c0; background:#f8eee9; }
+.phone-alerts { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 14px; padding:10px 12px; border:1px solid hsl(var(--card-border)); border-radius:11px; background:#fbfaf5; }
+.phone-alert-identity { display:flex; align-items:center; gap:9px; min-width:0; }
+.phone-alert-icon { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border:1px solid #d9e4dd; border-radius:8px; color:#356b5f; background:#edf4ee; }
+.phone-alert-copy { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.phone-alert-copy strong { color:#41554f; font-size:11px; font-weight:800; }
+.phone-alert-status { color:#77837d; font-size:10px; line-height:1.4; }
+.phone-alert-status.enabled { color:#2d735a; font-weight:800; }
+.phone-alert-status.blocked { color:#9a4d3e; }
+.phone-alert-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-wrap:wrap; }
+.phone-alert-enable,.phone-alert-text-btn,.phone-alert-test { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; border:0; background:transparent; font-size:10px; font-weight:800; }
+.phone-alert-enable { padding:0 9px; border:1px solid #2b6c5d; border-radius:7px; color:#fff; background:#2b6c5d; }
+.phone-alert-enable:hover { background:#20574b; }
+.phone-alert-text-btn { padding:0 4px; color:#9a4d3e; text-decoration:underline; text-underline-offset:2px; }
+.phone-alert-test { padding:0 4px; color:#356b5f; text-decoration:underline; text-underline-offset:2px; }
+.phone-alert-enable:disabled,.phone-alert-text-btn:disabled,.phone-alert-test:disabled { cursor:wait; opacity:.55; }
+.phone-alert-message { flex:1 0 100%; color:#68766f; font-size:10px; }
 .alarm-message { padding:8px 11px; border-radius:8px; color:#695526; background:#f5edd9; font-size:11px; }
 .alarm-banner { width:100%; min-height:48px; display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px; font-size:12px; font-weight:800; }
 .alarm-banner > span { flex:1; min-width:0; }
@@ -285,6 +301,12 @@
 .alarm-resume-warning { display:flex; flex-direction:column; gap:4px; padding:10px 12px; border:1px solid #db8b50; border-radius:9px; color:#7f321f; background:#fff0e5; }
 .alarm-resume-warning strong { font:700 10px var(--app-font-mono); letter-spacing:.04em; }
 .alarm-resume-warning span { font-size:10px; line-height:1.5; }
+.phone-alerts + .alarm-message { margin-top:1px; }
+
+@media (max-width: 650px) {
+  .phone-alerts { align-items:flex-start; flex-direction:column; }
+  .phone-alert-actions { width:100%; justify-content:flex-start; }
+}
 .alarm-utility-btn.wake-enabled { color:#155d50; border-color:#7ba99b; background:#e6f1e8; }
 .clash-backdrop { z-index:60; }
 .clash-heading { display:flex; align-items:flex-start; gap:10px; }

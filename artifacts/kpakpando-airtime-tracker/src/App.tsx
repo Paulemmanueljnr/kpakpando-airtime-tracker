@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { PrintTools } from '@/components/print-tools';
@@ -94,7 +94,9 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 function Dashboard({ expired = false }: { expired?: boolean }) {
-  const online = useOnlineStatus();
+  const browserOnline = useOnlineStatus();
+  const [connectionHealthy, setConnectionHealthy] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+  const online = browserOnline && connectionHealthy;
   const entriesQuery = useListEntries();
   const summaryQuery = useGetDashboardSummary();
   const createEntry = useCreateEntry();
@@ -108,13 +110,58 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
   const [clashPrompt, setClashPrompt] = useState<ClashPrompt | null>(null);
   const [toast, setToast] = useState('');
   const [now, setNow] = useState(new Date());
+  const lastSuccessAtRef = useRef(entriesQuery.dataUpdatedAt);
+  const lastErrorAtRef = useRef(entriesQuery.errorUpdatedAt);
   const today = getLagosToday(now);
   const currentTime = getLagosTime(now);
   const todayWeekday = getLagosWeekday(now);
+  const refreshSchedule = useCallback(async (showBackOnline = false) => {
+    if (!navigator.onLine) {
+      setConnectionHealthy(false);
+      return;
+    }
+    void summaryQuery.refetch();
+    const entriesResult = await entriesQuery.refetch();
+    if (entriesResult.isSuccess) {
+      setConnectionHealthy(true);
+      if (showBackOnline) setToast('Back online - schedule updated');
+    } else {
+      setConnectionHealthy(false);
+    }
+  }, [entriesQuery.refetch, summaryQuery.refetch]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+  useEffect(() => {
+    if (!browserOnline) setConnectionHealthy(false);
+  }, [browserOnline]);
+  useEffect(() => {
+    if (entriesQuery.dataUpdatedAt > lastSuccessAtRef.current) {
+      lastSuccessAtRef.current = entriesQuery.dataUpdatedAt;
+      if (browserOnline) setConnectionHealthy(true);
+    }
+    if (entriesQuery.errorUpdatedAt > lastErrorAtRef.current) {
+      lastErrorAtRef.current = entriesQuery.errorUpdatedAt;
+      setConnectionHealthy(false);
+    }
+  }, [browserOnline, entriesQuery.dataUpdatedAt, entriesQuery.errorUpdatedAt]);
+  useEffect(() => {
+    const handleOnline = () => { void refreshSchedule(true); };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshSchedule();
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    const timer = window.setInterval(refreshWhenVisible, 60_000);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.clearInterval(timer);
+    };
+  }, [refreshSchedule]);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(''), 2800);

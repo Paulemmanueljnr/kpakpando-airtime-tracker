@@ -25,7 +25,7 @@ export type {
   Weekday,
 };
 
-const API_URL = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "") ?? "";
+export const API_URL = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, "") ?? "";
 const DEMO_STORAGE_KEY = "kpakpando-airtime-tracker-demo-v1";
 
 setBaseUrl(API_URL || null);

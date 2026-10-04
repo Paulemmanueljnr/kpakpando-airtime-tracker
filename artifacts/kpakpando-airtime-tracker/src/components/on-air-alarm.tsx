@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, BellRing, Check, Clock3, Volume2, VolumeX } from 'lucide-react';
+import { PhonePushAlerts } from '@/components/phone-push-alerts';
 import {
   getEntryStatus,
   getLagosToday,
@@ -10,6 +11,8 @@ import {
 const ACKNOWLEDGED_STORAGE_KEY = 'kpakpando-on-air-alarm-acknowledged-v1';
 const REMINDER_STORAGE_KEY = 'kpakpando-on-air-alarm-reminders-v1';
 const ALARM_ENABLED_STORAGE_KEY = 'kpakpando-on-air-alarm-enabled-v1';
+const ALARM_MUTED_STORAGE_KEY = 'kpakpando-on-air-alarm-muted-v1';
+const KEEP_AWAKE_STORAGE_KEY = 'kpakpando-on-air-keep-awake-v1';
 const REMINDER_WINDOW_MS = 5 * 60 * 1000;
 const CATCH_UP_WINDOW_MS = 2 * 60 * 1000;
 
@@ -43,6 +46,22 @@ function readAlarmPreference() {
     return window.localStorage.getItem(ALARM_ENABLED_STORAGE_KEY) === 'true';
   } catch {
     return false;
+  }
+}
+
+function readStoredBoolean(storageKey: string) {
+  try {
+    return window.localStorage.getItem(storageKey) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredBoolean(storageKey: string, value: boolean) {
+  try {
+    window.localStorage.setItem(storageKey, String(value));
+  } catch {
+    // Current-page settings still apply if browser storage is unavailable.
   }
 }
 
@@ -141,12 +160,12 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
   const wantsAlarmRef = useRef(wantsAlarm);
   const [resumeRequired, setResumeRequired] = useState(() => readAlarmPreference());
   const [audioRunning, setAudioRunning] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const mutedRef = useRef(false);
+  const [muted, setMuted] = useState(() => readStoredBoolean(ALARM_MUTED_STORAGE_KEY));
+  const mutedRef = useRef(muted);
   const [audioMessage, setAudioMessage] = useState('');
   const [wakeMessage, setWakeMessage] = useState('');
-  const [keepAwake, setKeepAwake] = useState(false);
-  const keepAwakeRef = useRef(false);
+  const [keepAwake, setKeepAwake] = useState(() => readStoredBoolean(KEEP_AWAKE_STORAGE_KEY));
+  const keepAwakeRef = useRef(keepAwake);
   const [testPlaying, setTestPlaying] = useState(false);
   const acknowledgedRef = useRef(new Set(readStoredKeys(ACKNOWLEDGED_STORAGE_KEY)));
   const remindersRef = useRef(new Set(readStoredKeys(REMINDER_STORAGE_KEY)));
@@ -350,11 +369,14 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
   }, []);
 
   useEffect(() => {
-    const resumeOnInteraction = () => {
+    const resumeOnInteraction = (event: Event) => {
       if (wantsAlarmRef.current && audioRef.current?.state !== 'running') {
         resumeGestureAtRef.current = Date.now();
         void startAlarmAudio(false);
       }
+      const target = event.target;
+      const togglingWakePreference = target instanceof Element && Boolean(target.closest('[data-testid="button-keep-awake"]'));
+      if (keepAwakeRef.current && !togglingWakePreference) void requestWakeLock();
     };
     document.addEventListener('pointerdown', resumeOnInteraction, true);
     document.addEventListener('keydown', resumeOnInteraction, true);
@@ -448,12 +470,14 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
     const nextMuted = !mutedRef.current;
     mutedRef.current = nextMuted;
     setMuted(nextMuted);
+    writeStoredBoolean(ALARM_MUTED_STORAGE_KEY, nextMuted);
   };
 
   const toggleKeepAwake = () => {
     const next = !keepAwakeRef.current;
     keepAwakeRef.current = next;
     setKeepAwake(next);
+    writeStoredBoolean(KEEP_AWAKE_STORAGE_KEY, next);
     if (next) void requestWakeLock();
     else {
       setWakeMessage('');
@@ -529,6 +553,7 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
   const nextSlotDay = nextSlot
     ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(nextSlot.timestamp))
     : '';
+  const alarmIndicator = !wantsAlarm ? 'Off' : armed && audioRunning ? 'Armed' : 'Waiting for tap';
 
   return <section className="on-air-alarm" aria-label="On-air alarms">
     <div className="next-up-strip">
@@ -549,8 +574,8 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
       <div className="alarm-readiness">
         <span className={`alarm-ready-dot ${audioRunning ? 'armed' : ''}`} />
         <div>
-          <strong>{armed && audioRunning ? 'ALARM ARMED' : 'ALARM NOT ARMED'}</strong>
-          <small>{armed && audioRunning ? 'Audio running · WAT schedule' : 'Visual alerts are on; sound needs attention'}</small>
+          <strong>{alarmIndicator}</strong>
+          <small>{alarmIndicator === 'Armed' ? 'Audio running · WAT schedule' : alarmIndicator === 'Off' ? 'Visual alerts remain on' : 'Tap or press a key to resume sound'}</small>
         </div>
       </div>
       <div className="alarm-buttons">
@@ -570,9 +595,10 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
     </div>
 
     {resumeRequired && wantsAlarm && <div className="alarm-resume-warning" role="status" data-testid="alarm-resume-warning">
-      <strong>SOUND OFF — click or tap anywhere to resume</strong>
-      <span>Your alarm was enabled before this page refreshed. Browsers require a fresh interaction before sound can run.</span>
+      <strong>Alarm was ON - tap anywhere to resume sound</strong>
+      <span>Browsers require a fresh interaction before sound can run. Your saved alarm schedule is still active.</span>
     </div>}
+    <PhonePushAlerts />
     {audioMessage && <div className="alarm-message" role="status">{audioMessage}</div>}
     {wakeMessage && <div className="alarm-message" role="status">{wakeMessage}</div>}
 
