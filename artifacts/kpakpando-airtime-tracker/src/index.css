@@ -270,3 +270,56 @@
  .tab{display:flex;justify-content:center;align-items:center;border:1px solid hsl(var(--border));border-radius:8px;padding:9px 5px}
  .tab.active::after{display:none}
 }
+
+.page-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.print-tools { display:flex; align-items:center; gap:7px; }
+.print-menu-wrap { position:relative; }
+.print-menu { position:absolute; z-index:25; top:calc(100% + 6px); left:0; min-width:190px; padding:5px; border:1px solid hsl(var(--border)); border-radius:10px; background:hsl(var(--card)); box-shadow:0 12px 30px #172f2a20; }
+.print-menu button { width:100%; min-height:36px; padding:0 10px; border:0; border-radius:7px; color:hsl(var(--foreground)); background:transparent; text-align:left; font-size:11px; }
+.print-menu button:hover { background:hsl(var(--secondary)); }
+.whatsapp-share { text-decoration:none; }
+.offline-banner { display:flex; align-items:center; gap:10px; margin:14px 0 0; padding:11px 13px; border:1px solid #dfc47f; border-radius:10px; color:#705519; background:#f7eed8; font-size:11px; line-height:1.5; }
+.offline-banner svg { flex:0 0 auto; }
+.offline-banner strong { font-family:var(--app-font-mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase; }
+.primary-btn:disabled,.quiet-btn:disabled,.danger-btn:disabled,.icon-btn:disabled { cursor:not-allowed; opacity:.5; transform:none; box-shadow:none; }
+.alarm-resume-warning { display:flex; flex-direction:column; gap:4px; padding:10px 12px; border:1px solid #db8b50; border-radius:9px; color:#7f321f; background:#fff0e5; }
+.alarm-resume-warning strong { font:700 10px var(--app-font-mono); letter-spacing:.04em; }
+.alarm-resume-warning span { font-size:10px; line-height:1.5; }
+.alarm-utility-btn.wake-enabled { color:#155d50; border-color:#7ba99b; background:#e6f1e8; }
+.clash-backdrop { z-index:60; }
+.clash-heading { display:flex; align-items:flex-start; gap:10px; }
+.clash-heading > svg { flex:0 0 auto; margin-top:3px; color:#9c6b1e; }
+.clash-list { display:grid; gap:8px; margin:12px 0 0; padding:0; list-style:none; }
+.clash-list li { display:flex; flex-direction:column; gap:3px; padding:10px 11px; border:1px solid #e5d9be; border-radius:8px; background:#fbf7eb; }
+.clash-list strong { color:#3e4e47; font-size:12px; }
+.clash-list span,.clash-list small { color:#707b74; font-size:10px; line-height:1.5; }
+.print-sheet { display:none; }
+
+@media(max-width:760px) {
+  .page-head { flex-wrap:wrap; }
+  .page-actions { width:100%; justify-content:flex-start; }
+  .page-actions > .primary-btn { margin-left:auto; }
+  .offline-banner { align-items:flex-start; }
+}
+
+@media print {
+  @page { margin:14mm; }
+  html,body,#root { min-height:0 !important; width:100% !important; background:#fff !important; }
+  body * { visibility:hidden !important; }
+  .print-sheet,.print-sheet * { visibility:visible !important; }
+  .print-sheet { display:block !important; position:fixed; inset:0; z-index:99999; overflow:visible; width:100%; padding:0; color:#202724; background:#fff; font-family:Arial,sans-serif; }
+  .print-header { display:flex; align-items:center; gap:16px; padding-bottom:16px; border-bottom:2px solid #174640; }
+  .print-header img { width:64px; height:64px; object-fit:contain; }
+  .print-header h1 { margin:0 0 5px; color:#174640; font-size:17px; }
+  .print-header h2 { margin:0; font-size:14px; }
+  .print-datetime { display:flex; flex-direction:column; gap:5px; margin-left:auto; text-align:right; font-size:9px; }
+  .print-datetime span { color:#68736e; }
+  .print-table { width:100%; margin-top:16px; border-collapse:collapse; font-size:9px; }
+  .print-table th,.print-table td { padding:7px 6px; border:1px solid #cbd2cd; text-align:left; vertical-align:top; }
+  .print-table th { color:#173f38; background:#eef3ef !important; font-size:8px; text-transform:uppercase; letter-spacing:.04em; print-color-adjust:exact; }
+  .print-table thead { display:table-header-group; }
+  .print-table tr { break-inside:avoid; }
+  .print-checkbox { display:inline-block; width:13px; height:13px; border:1px solid #48564f; }
+  .print-initials { min-width:60px; height:28px; }
+  .shell,.main,.content { min-height:0 !important; width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; overflow:visible !important; background:#fff !important; }
+}

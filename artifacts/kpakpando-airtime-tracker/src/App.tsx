@@ -1,9 +1,12 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { PrintTools } from '@/components/print-tools';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { OnAirAlarm } from '@/components/on-air-alarm';
+import { useOnlineStatus } from '@/hooks/use-online-status';
+import { findScheduleClashes } from '@/lib/entry-schedule';
 import stationLogo from '@assets/kpakpando_logo_original_1791056328993.png';
 import {
   useCreateEntry,
@@ -24,6 +27,7 @@ import {
 } from '@/lib/airtime-api';
 import NotFound from '@/pages/not-found';
 import {
+  AlertTriangle,
   Activity,
   Archive,
   AudioLines,
@@ -32,6 +36,7 @@ import {
   CreditCard,
   FileAudio,
   LayoutDashboard,
+  MessageCircle,
   Menu,
   Mic2,
   Pencil,
@@ -41,6 +46,7 @@ import {
   Search,
   Trash2,
   X,
+  WifiOff,
 } from 'lucide-react';
 import { Link, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
@@ -48,6 +54,7 @@ const queryClient = new QueryClient();
 const weekdays: Weekday[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 type ViewTab = 'All' | 'Jingles' | 'Sponsored Programs' | 'On Air Today';
 type ModalState = { kind: 'create' } | { kind: 'edit' | 'renew'; entry: AirtimeEntry } | { kind: 'delete'; entry: AirtimeEntry };
+type ClashPrompt = { data: AirtimeEntryInput; conflicts: AirtimeEntry[] };
 
 function BrandMark() {
   return <div className="brand-mark" role="img" aria-label="Kpakpando station logo">
@@ -87,6 +94,7 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 function Dashboard({ expired = false }: { expired?: boolean }) {
+  const online = useOnlineStatus();
   const entriesQuery = useListEntries();
   const summaryQuery = useGetDashboardSummary();
   const createEntry = useCreateEntry();
@@ -97,6 +105,7 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
   const [paymentFilter, setPaymentFilter] = useState('All payments');
   const [typeFilter, setTypeFilter] = useState('All types');
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [clashPrompt, setClashPrompt] = useState<ClashPrompt | null>(null);
   const [toast, setToast] = useState('');
   const [now, setNow] = useState(new Date());
   const today = getLagosToday(now);
@@ -140,8 +149,12 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
 
   const closeModal = () => setModal(null);
   const actionError = createEntry.error || updateEntry.error || deleteEntry.error;
-  const handleSubmit = async (data: AirtimeEntryInput) => {
+  const persistEntry = async (data: AirtimeEntryInput) => {
     if (!modal || modal.kind === 'delete') return;
+    if (!online) {
+      setToast('You are offline. Reconnect before saving changes.');
+      return;
+    }
     try {
       if (modal.kind === 'create') await createEntry.mutateAsync({ data });
       else await updateEntry.mutateAsync({ id: modal.entry.id, data });
@@ -151,7 +164,24 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
       // Mutation errors are shown inside the active form.
     }
   };
+  const handleSubmit = async (data: AirtimeEntryInput) => {
+    if (!modal || modal.kind === 'delete') return;
+    if (!online) {
+      setToast('You are offline. Reconnect before saving changes.');
+      return;
+    }
+    const conflicts = findScheduleClashes(data, entries, today, modal.kind === 'create' ? undefined : modal.entry.id);
+    if (conflicts.length) {
+      setClashPrompt({ data, conflicts });
+      return;
+    }
+    await persistEntry(data);
+  };
   const handleDelete = async (entry: AirtimeEntry) => {
+    if (!online) {
+      setToast('You are offline. Reconnect before removing entries.');
+      return;
+    }
     try {
       await deleteEntry.mutateAsync({ id: entry.id });
       setToast(getEntryStatus(entry, today) === 'expired' ? 'Expired entry permanently deleted.' : 'Entry removed from the airtime log.');
@@ -164,11 +194,27 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
   const summary = summaryQuery.data;
   const tabs: ViewTab[] = ['All', 'Jingles', 'Sponsored Programs', 'On Air Today'];
   const title = expired ? 'Expired entries' : 'Airtime overview';
+  const expiringEntries = entries.filter(entry => getEntryStatus(entry, today) === 'expiring-soon');
+  const whatsappMessage = expiringEntries.length
+    ? `Kpakpando airtime contracts expiring within 7 days:\n${expiringEntries.map(entry => `• ${entry.client} — ${entry.title}; ends ${formatDate(entry.endDate)}; ${entry.timeSlots.join(', ')} WAT`).join('\n')}`
+    : 'No Kpakpando airtime contracts are expiring within the next 7 days.';
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+  const confirmClashSave = async () => {
+    if (!clashPrompt || !online) return;
+    const data = clashPrompt.data;
+    setClashPrompt(null);
+    await persistEntry(data);
+  };
 
   return <div className="content">
+    {!online && <div className="offline-banner" role="status" data-testid="offline-banner"><WifiOff size={16} /><span><strong>Offline</strong> — showing saved airtime data. Add, edit, renew, and delete are disabled until you reconnect.</span></div>}
     <section className="page-head">
       <div><div className="eyebrow">{expired ? 'Archive / expired' : 'Transmission desk · live shift'}</div><h1 className="page-title">{title}</h1><p className="page-note">{expired ? 'Past contracts, ready to renew or clear from the desk.' : 'Every booked second, accounted for.'}</p></div>
-      {!expired && <button className="primary-btn" onClick={() => setModal({ kind: 'create' })} data-testid="button-add-entry"><Plus size={16} /> Add entry</button>}
+      <div className="page-actions">
+        <PrintTools entries={entries} todaySlots={onAirSlots} today={today} />
+        <a className="quiet-btn whatsapp-share" href={whatsappHref} target="_blank" rel="noopener noreferrer" data-testid="button-share-whatsapp"><MessageCircle size={15} /> WhatsApp</a>
+        {!expired && <button className="primary-btn" onClick={() => setModal({ kind: 'create' })} disabled={!online} data-testid="button-add-entry"><Plus size={16} /> Add entry</button>}
+      </div>
     </section>
     {!expired && <OnAirAlarm entries={entries} />}
     {!expired && <section className="summary-grid" aria-label="Airtime summary">
@@ -209,12 +255,13 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
     <div className="entry-list">
       {entriesQuery.isLoading ? <><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></> :
         entriesQuery.isError ? <div className="state-panel"><div className="empty-symbol"><Radio size={18} /></div><h3>Desk connection interrupted</h3><p>We couldn’t load the airtime log. Your entries are still safe.</p><button className="quiet-btn" onClick={retry} data-testid="button-retry">Try again</button></div> :
-          filtered.length === 0 ? <div className="empty-state"><div className="empty-symbol">{expired ? <Archive size={18} /> : search || paymentFilter !== 'All payments' ? <Search size={18} /> : <Mic2 size={18} />}</div><h3>{expired ? 'No expired entries' : search || paymentFilter !== 'All payments' ? 'No matching airtime' : tab === 'On Air Today' ? 'Nothing on today’s log' : 'The airtime desk is clear'}</h3><p>{expired ? 'Entries appear here after their end date passes.' : search || paymentFilter !== 'All payments' ? 'Try another search or clear the payment filter.' : tab === 'On Air Today' ? 'No active entries are scheduled to air today.' : 'Add the first jingle or sponsored program to begin the log.'}</p>{!expired && !search && <button className="primary-btn" onClick={() => setModal({ kind: 'create' })} data-testid="button-add-first-entry"><Plus size={15} /> Add entry</button>}</div> :
-            filtered.map(entry => <EntryRow key={entry.id} entry={entry} expired={expired} onEdit={() => setModal({ kind: 'edit', entry })} onRenew={() => setModal({ kind: 'renew', entry })} onDelete={() => setModal({ kind: 'delete', entry })} />)}
+          filtered.length === 0 ? <div className="empty-state"><div className="empty-symbol">{expired ? <Archive size={18} /> : search || paymentFilter !== 'All payments' ? <Search size={18} /> : <Mic2 size={18} />}</div><h3>{expired ? 'No expired entries' : search || paymentFilter !== 'All payments' ? 'No matching airtime' : tab === 'On Air Today' ? 'Nothing on today’s log' : 'The airtime desk is clear'}</h3><p>{expired ? 'Entries appear here after their end date passes.' : search || paymentFilter !== 'All payments' ? 'Try another search or clear the payment filter.' : tab === 'On Air Today' ? 'No active entries are scheduled to air today.' : 'Add the first jingle or sponsored program to begin the log.'}</p>{!expired && !search && <button className="primary-btn" onClick={() => setModal({ kind: 'create' })} disabled={!online} data-testid="button-add-first-entry"><Plus size={15} /> Add entry</button>}</div> :
+            filtered.map(entry => <EntryRow key={entry.id} entry={entry} expired={expired} online={online} onEdit={() => setModal({ kind: 'edit', entry })} onRenew={() => setModal({ kind: 'renew', entry })} onDelete={() => setModal({ kind: 'delete', entry })} />)}
     </div>
     {actionError && !modal && <div className="alert-note" role="alert">A change could not be saved. Check the connection and try again.</div>}
-    {modal && modal.kind !== 'delete' && <EntryModal state={modal} busy={createEntry.isPending || updateEntry.isPending} error={actionError instanceof Error ? actionError.message : ''} onClose={closeModal} onSubmit={handleSubmit} />}
-    {modal?.kind === 'delete' && <ConfirmDelete entry={modal.entry} expired={expired} busy={deleteEntry.isPending} onCancel={closeModal} onConfirm={() => void handleDelete(modal.entry)} />}
+    {modal && modal.kind !== 'delete' && <EntryModal state={modal} busy={createEntry.isPending || updateEntry.isPending} online={online} error={actionError instanceof Error ? actionError.message : ''} onClose={closeModal} onSubmit={handleSubmit} />}
+    {modal?.kind === 'delete' && <ConfirmDelete entry={modal.entry} expired={expired} busy={deleteEntry.isPending} online={online} onCancel={closeModal} onConfirm={() => void handleDelete(modal.entry)} />}
+    {clashPrompt && <ClashConfirmation conflicts={clashPrompt.conflicts} online={online} onCancel={() => setClashPrompt(null)} onContinue={() => void confirmClashSave()} />}
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>;
 }
@@ -228,7 +275,7 @@ function formatDate(date: string) {
     .format(new Date(`${date}T12:00:00.000Z`));
 }
 
-function EntryRow({ entry, expired, onEdit, onRenew, onDelete }: { entry: AirtimeEntry; expired: boolean; onEdit: () => void; onRenew: () => void; onDelete: () => void }) {
+function EntryRow({ entry, expired, online, onEdit, onRenew, onDelete }: { entry: AirtimeEntry; expired: boolean; online: boolean; onEdit: () => void; onRenew: () => void; onDelete: () => void }) {
   const status = getEntryStatus(entry, getLagosToday());
   const statusText = status === 'expiring-soon' ? 'Expiring soon' : status === 'not-started' ? 'Not started' : status === 'expired' ? 'Expired' : 'Active';
   return <article className={`entry-row ${expired ? 'expired-entry' : ''}`} data-testid={`entry-${entry.id}`}>
@@ -237,11 +284,11 @@ function EntryRow({ entry, expired, onEdit, onRenew, onDelete }: { entry: Airtim
     <div className="expiry-cell"><div className="cell-label">{expired ? 'Ended' : 'Countdown'}</div><div className="cell-value">{expired ? getEntryCountdown(entry) : getEntryCountdown(entry)}</div></div>
     <div className="schedule-cell"><div className="cell-label">Airing · dates</div><div className="cell-value schedule-info"><div className="schedule-primary">{entry.timeSlots.join(' · ') || 'No time set'}</div><div className="schedule-secondary">{formatDate(entry.startDate)} – {formatDate(entry.endDate)}</div>{entry.type === 'Sponsored Program' && <div className="schedule-secondary">{entry.daysOfWeek.length ? entry.daysOfWeek.map(day => day.slice(0, 3)).join(' · ') : 'Every day'}</div>}</div></div>
     <div className="payment-cell"><div className="cell-label">Payment</div><span className={`badge ${entry.paymentStatus === 'Paid' ? 'paid' : 'unpaid'}`}>{entry.paymentStatus === 'Paid' ? <Check size={11} /> : <CreditCard size={11} />}{entry.paymentStatus}</span></div>
-    <div className="entry-actions">{expired ? <><button className="icon-btn" title="Renew entry" aria-label={`Renew ${entry.title}`} onClick={onRenew} data-testid={`button-renew-${entry.id}`}><RotateCw /></button><button className="icon-btn" title="Permanently delete" aria-label={`Permanently delete ${entry.title}`} onClick={onDelete} data-testid={`button-delete-${entry.id}`}><Trash2 /></button></> : <><button className="icon-btn" title="Edit entry" aria-label={`Edit ${entry.title}`} onClick={onEdit} data-testid={`button-edit-${entry.id}`}><Pencil /></button><button className="icon-btn" title="Renew entry" aria-label={`Renew ${entry.title}`} onClick={onRenew} data-testid={`button-renew-${entry.id}`}><RotateCw /></button><button className="icon-btn" title="Remove entry" aria-label={`Remove ${entry.title}`} onClick={onDelete} data-testid={`button-remove-${entry.id}`}><Trash2 /></button></>}</div>
+     <div className="entry-actions">{expired ? <><button className="icon-btn" title={online ? 'Renew entry' : 'Reconnect to renew'} aria-label={`Renew ${entry.title}`} onClick={onRenew} disabled={!online} data-testid={`button-renew-${entry.id}`}><RotateCw /></button><button className="icon-btn" title={online ? 'Permanently delete' : 'Reconnect to delete'} aria-label={`Permanently delete ${entry.title}`} onClick={onDelete} disabled={!online} data-testid={`button-delete-${entry.id}`}><Trash2 /></button></> : <><button className="icon-btn" title={online ? 'Edit entry' : 'Reconnect to edit'} aria-label={`Edit ${entry.title}`} onClick={onEdit} disabled={!online} data-testid={`button-edit-${entry.id}`}><Pencil /></button><button className="icon-btn" title={online ? 'Renew entry' : 'Reconnect to renew'} aria-label={`Renew ${entry.title}`} onClick={onRenew} disabled={!online} data-testid={`button-renew-${entry.id}`}><RotateCw /></button><button className="icon-btn" title={online ? 'Remove entry' : 'Reconnect to delete'} aria-label={`Remove ${entry.title}`} onClick={onDelete} disabled={!online} data-testid={`button-remove-${entry.id}`}><Trash2 /></button></>}</div>
   </article>;
 }
 
-function EntryModal({ state, busy, error, onClose, onSubmit }: { state: Exclude<ModalState, { kind: 'delete' }>; busy: boolean; error: string; onClose: () => void; onSubmit: (data: AirtimeEntryInput) => void }) {
+function EntryModal({ state, busy, online, error, onClose, onSubmit }: { state: Exclude<ModalState, { kind: 'delete' }>; busy: boolean; online: boolean; error: string; onClose: () => void; onSubmit: (data: AirtimeEntryInput) => void }) {
   const existing = state.kind === 'create' ? undefined : state.entry;
   const isRenew = state.kind === 'renew';
   const [type, setType] = useState<AirtimeType>(existing?.type ?? 'Jingle');
@@ -257,6 +304,7 @@ function EntryModal({ state, busy, error, onClose, onSubmit }: { state: Exclude<
   const toggleDay = (day: Weekday) => setDays(current => current.includes(day) ? current.filter(item => item !== day) : weekdays.filter(item => current.includes(item) || item === day));
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!online) return setValidation('You are offline. Reconnect before saving changes.');
     const slots = times.split(',').map(item => item.trim()).filter(Boolean);
     if (!client.trim() || !title.trim()) return setValidation('Client and title are required.');
     if (!startDate || !endDate || endDate < startDate) return setValidation('End date must be on or after the start date.');
@@ -269,6 +317,7 @@ function EntryModal({ state, busy, error, onClose, onSubmit }: { state: Exclude<
     <section className="modal" role="dialog" aria-modal="true" aria-labelledby="entry-modal-title">
       <div className="modal-head"><div><h2 id="entry-modal-title">{heading}</h2><p>{isRenew ? 'Keep the schedule, set the new contract window.' : 'Log the booking details for the transmission desk.'}</p></div><button className="icon-btn" onClick={onClose} aria-label="Close form"><X /></button></div>
       <form className="modal-body" onSubmit={submit}>
+        {!online && <div className="alert-note" role="status">You are offline. Saved entries remain available, but changes cannot be saved until you reconnect.</div>}
         <div className="form-grid">
           <div className="field"><label htmlFor="entry-type">Entry type</label><select id="entry-type" value={type} onChange={event => setType(event.target.value as AirtimeType)} data-testid="input-entry-type"><option>Jingle</option><option>Sponsored Program</option></select></div>
           <div className="field"><label htmlFor="entry-payment">Payment status</label><select id="entry-payment" value={payment} onChange={event => setPayment(event.target.value as 'Paid' | 'Unpaid')} data-testid="input-payment-status"><option>Unpaid</option><option>Paid</option></select></div>
@@ -281,17 +330,31 @@ function EntryModal({ state, busy, error, onClose, onSubmit }: { state: Exclude<
           <div className="field full"><label htmlFor="entry-notes">Notes · optional</label><textarea id="entry-notes" value={notes} onChange={event => setNotes(event.target.value)} maxLength={500} placeholder="Production or scheduling notes" data-testid="input-notes" /></div>
         </div>
         {(validation || error) && <div className="form-error" role="alert">{validation || error}</div>}
-        <div className="modal-actions"><button type="button" className="quiet-btn" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" className="primary-btn" disabled={busy} data-testid="button-submit-entry">{busy ? 'Saving…' : heading}</button></div>
+        <div className="modal-actions"><button type="button" className="quiet-btn" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" className="primary-btn" disabled={busy || !online} data-testid="button-submit-entry">{busy ? 'Saving…' : heading}</button></div>
       </form>
     </section>
   </div>;
 }
 
-function ConfirmDelete({ entry, expired, busy, onCancel, onConfirm }: { entry: AirtimeEntry; expired: boolean; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+function ConfirmDelete({ entry, expired, busy, online, onCancel, onConfirm }: { entry: AirtimeEntry; expired: boolean; busy: boolean; online: boolean; onCancel: () => void; onConfirm: () => void }) {
   return <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
     <section className="modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" style={{ maxWidth: 430 }}>
       <div className="modal-head"><div><h2 id="delete-title">{expired ? 'Delete this entry?' : 'Remove this entry?'}</h2><p>{expired ? 'Permanent action · expired airtime' : 'This airtime will be removed from the log.'}</p></div><button className="icon-btn" onClick={onCancel} aria-label="Close confirmation" data-testid="button-close-confirm"><X /></button></div>
-      <div className="modal-body"><p className="confirm-copy"><strong>{entry.title}</strong> for {entry.client} will be removed from the airtime log. This cannot be undone.</p>{expired && <div className="alert-note">This entry ended {formatDate(entry.endDate)}. Renew it instead if the booking is continuing.</div>}<div className="modal-actions"><button className="quiet-btn" onClick={onCancel} disabled={busy} data-testid="button-cancel-delete">Keep entry</button><button className="danger-btn" onClick={onConfirm} disabled={busy} data-testid="button-confirm-delete">{busy ? 'Removing…' : expired ? 'Permanently delete' : 'Remove entry'}</button></div></div>
+      <div className="modal-body"><p className="confirm-copy"><strong>{entry.title}</strong> for {entry.client} will be removed from the airtime log. This cannot be undone.</p>{!online && <div className="alert-note">You are offline. Reconnect before removing this entry.</div>}{expired && <div className="alert-note">This entry ended {formatDate(entry.endDate)}. Renew it instead if the booking is continuing.</div>}<div className="modal-actions"><button className="quiet-btn" onClick={onCancel} disabled={busy} data-testid="button-cancel-delete">Keep entry</button><button className="danger-btn" onClick={onConfirm} disabled={busy || !online} data-testid="button-confirm-delete">{busy ? 'Removing…' : expired ? 'Permanently delete' : 'Remove entry'}</button></div></div>
+    </section>
+  </div>;
+}
+
+function ClashConfirmation({ conflicts, online, onCancel, onContinue }: { conflicts: AirtimeEntry[]; online: boolean; onCancel: () => void; onContinue: () => void }) {
+  return <div className="modal-backdrop clash-backdrop" role="presentation">
+    <section className="modal clash-modal" role="alertdialog" aria-modal="true" aria-labelledby="clash-title">
+      <div className="modal-head"><div className="clash-heading"><AlertTriangle size={20} /><div><h2 id="clash-title">Schedule overlap</h2><p>This booking shares airtime with an existing entry.</p></div></div><button className="icon-btn" onClick={onCancel} aria-label="Return to schedule"><X /></button></div>
+      <div className="modal-body">
+        <p className="confirm-copy">These active bookings share at least one time, weekday, and contract date:</p>
+        <ul className="clash-list">{conflicts.map(entry => <li key={entry.id}><strong>{entry.title}</strong><span>{entry.client} · {entry.timeSlots.join(', ')} WAT</span><small>{formatDate(entry.startDate)} – {formatDate(entry.endDate)}{entry.type === 'Sponsored Program' && entry.daysOfWeek.length > 0 ? ` · ${entry.daysOfWeek.map(day => day.slice(0, 3)).join(', ')}` : ''}</small></li>)}</ul>
+        {!online && <div className="alert-note">You are offline. Reconnect before saving this overlapping schedule.</div>}
+        <div className="modal-actions"><button className="quiet-btn" onClick={onCancel}>Edit schedule</button><button className="primary-btn" onClick={onContinue} disabled={!online} data-testid="button-save-clashing-entry">Save anyway</button></div>
+      </div>
     </section>
   </div>;
 }
