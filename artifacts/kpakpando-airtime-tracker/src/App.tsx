@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { OnAirAlarm } from '@/components/on-air-alarm';
 import stationLogo from '@assets/kpakpando_logo_original_1791056328993.png';
 import {
   useCreateEntry,
@@ -169,6 +170,7 @@ function Dashboard({ expired = false }: { expired?: boolean }) {
       <div><div className="eyebrow">{expired ? 'Archive / expired' : 'Transmission desk · live shift'}</div><h1 className="page-title">{title}</h1><p className="page-note">{expired ? 'Past contracts, ready to renew or clear from the desk.' : 'Every booked second, accounted for.'}</p></div>
       {!expired && <button className="primary-btn" onClick={() => setModal({ kind: 'create' })} data-testid="button-add-entry"><Plus size={16} /> Add entry</button>}
     </section>
+    {!expired && <OnAirAlarm entries={entries} />}
     {!expired && <section className="summary-grid" aria-label="Airtime summary">
       <SummaryCard label="Active" value={summary?.active} icon={<Activity />} wash="#e3eee6" ink="#286e5c" />
       <SummaryCard label="Expiring soon" value={summary?.expiringSoon} icon={<Clock3 />} wash="#f5ebd1" ink="#a47720" />
