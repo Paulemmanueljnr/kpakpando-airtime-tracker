@@ -1,3 +1,5 @@
+import { handlePushRequest, runScheduled } from "./push";
+
 type AirtimeType = "Jingle" | "Sponsored Program";
 type PaymentStatus = "Paid" | "Unpaid";
 type Weekday =
@@ -54,6 +56,8 @@ interface D1Database {
 interface Env {
   DB: D1Database;
   ALLOWED_ORIGINS?: string;
+  VAPID_PRIVATE_JWK?: string;
+  VAPID_SUBJECT?: string;
 }
 
 interface EntryRow {
@@ -238,6 +242,10 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (path === "/api/healthz" && method === "GET") {
     return json({ status: "ok" }, 200, cors);
   }
+  if (path.startsWith("/api/push/")) {
+    const pushResponse = await handlePushRequest(request, env, path, method, cors);
+    if (pushResponse) return pushResponse;
+  }
   if (path === "/api/entries" && method === "GET") {
     return json(await allEntries(env.DB), 200, cors);
   }
@@ -373,5 +381,12 @@ export default {
       const cors = getCorsHeaders(request, env);
       return error("The request could not be completed.", 500, cors);
     }
+  },
+  async scheduled(
+    _event: unknown,
+    env: Env,
+    ctx: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<void> {
+    ctx.waitUntil(runScheduled(env));
   },
 };

@@ -9,5 +9,8 @@ database_id = "e531422a-fcbe-4c9a-8a4f-162b57d03086"
 migrations_dir = "migrations"
 
 [vars]
-# Replace this with your exact Vercel production origin. Add preview origins if needed.
 ALLOWED_ORIGINS = "https://kpakpando-airtime-tracker.vercel.app"
+VAPID_SUBJECT = "mailto:kpakpandofm@gmail.com"
+
+[triggers]
+crons = ["* * * * *"]

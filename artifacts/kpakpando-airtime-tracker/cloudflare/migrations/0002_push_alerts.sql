@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint TEXT PRIMARY KEY,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS push_alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slot_key TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  batch TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
