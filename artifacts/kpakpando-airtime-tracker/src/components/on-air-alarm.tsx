@@ -226,7 +226,10 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
         });
         audioListenerRef.current = true;
       }
-      await context.resume();
+            await Promise.race([
+        context.resume(),
+        new Promise<void>(resolve => window.setTimeout(resolve, 1500)),
+      ]);
       if (context.state !== 'running') throw new Error('Audio did not resume.');
       armedRef.current = true;
       wantsAlarmRef.current = true;
@@ -378,10 +381,12 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
       const togglingWakePreference = target instanceof Element && Boolean(target.closest('[data-testid="button-keep-awake"]'));
       if (keepAwakeRef.current && !togglingWakePreference) void requestWakeLock();
     };
-    document.addEventListener('pointerdown', resumeOnInteraction, true);
+       document.addEventListener('click', resumeOnInteraction, true);
+    document.addEventListener('touchend', resumeOnInteraction, true);
     document.addEventListener('keydown', resumeOnInteraction, true);
     return () => {
-      document.removeEventListener('pointerdown', resumeOnInteraction, true);
+      document.removeEventListener('click', resumeOnInteraction, true);
+      document.removeEventListener('touchend', resumeOnInteraction, true);
       document.removeEventListener('keydown', resumeOnInteraction, true);
     };
   }, []);
