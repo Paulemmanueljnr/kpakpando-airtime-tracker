@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, BellRing, Check, Clock3, Volume2, VolumeX } from 'lucide-react';
+import { FloatingAlertWindow } from '@/components/floating-alert-window';
 import { PhonePushAlerts } from '@/components/phone-push-alerts';
 import {
   getEntryStatus,
@@ -604,6 +605,15 @@ export function OnAirAlarm({ entries }: { entries: AirtimeEntry[] }) {
       <span>Browsers require a fresh interaction before sound can run. Your saved alarm schedule is still active.</span>
     </div>}
     <PhonePushAlerts />
+    <FloatingAlertWindow
+      ringing={activeAlarms.map(slot => ({ key: slot.key, title: slot.entry.title, client: slot.entry.client, time: slot.time }))}
+      next={nextSlot ? { title: nextSlot.entry.title, client: nextSlot.entry.client, time: nextSlot.time, timestamp: nextSlot.timestamp } : null}
+      nowMs={nowMs}
+      onAcknowledge={(key: string) => {
+        const slot = activeAlarms.find(s => s.key === key);
+        if (slot) acknowledge(slot);
+      }}
+    />
     {audioMessage && <div className="alarm-message" role="status">{audioMessage}</div>}
     {wakeMessage && <div className="alarm-message" role="status">{wakeMessage}</div>}
 
